@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #f4f5f1;
+      background: #171b1a;
+      font-family: Arial, sans-serif;
+    }
+    main { padding: 10px; }
+    .frame {
+      width: 100%;
+      overflow: hidden;
+      background: #090b0b;
+      border: 1px solid #38413d;
+      border-radius: 6px;
+    }
+    video {
+      display: block;
+      width: 100%;
+      max-height: 430px;
+      object-fit: contain;
+      background: #090b0b;
+    }
+    #status {
+      min-height: 24px;
+      padding: 8px 2px 0;
+      color: #d2d9d4;
+      font-size: 14px;
+    }
+    #status.error { color: #ff8f86; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="frame"><video id="video" autoplay muted playsinline></video></div>
+    <div id="status">Requesting camera access...</div>
+  </main>
+  <canvas id="canvas" hidden></canvas>
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const context = canvas.getContext("2d", { alpha: false });
+    const statusNode = document.getElementById("status");
+    let stream = null;
+    let intervalMs = 200;
+    let sequence = 0;
+    let timer = null;
+    let started = false;
+    let unavailableSent = false;
+    let lastVideoTime = -1;
+    let stalledSamples = 0;
+
+    function sendValue(value) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setComponentValue",
+        value,
+        dataType: "json"
+      }, "*");
+    }
+
+    function setHeight() {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setFrameHeight",
+        height: 480
+      }, "*");
+    }
+
+    function showUnavailable(message) {
+      if (unavailableSent) return;
+      unavailableSent = true;
+      statusNode.textContent = message;
+      statusNode.classList.add("error");
+      sendValue({ status: "unavailable", message, seq: ++sequence });
+    }
+
+    function captureNext() {
+      if (!stream || !video.videoWidth) return;
+      if (video.currentTime === lastVideoTime) {
+        stalledSamples += 1;
+        if (stalledSamples >= 3) showUnavailable("Camera stream stopped advancing.");
+        return;
+      }
+      lastVideoTime = video.currentTime;
+      stalledSamples = 0;
+      const scale = Math.min(1, 640 / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const jpeg = canvas.toDataURL("image/jpeg", 0.76).split(",", 2)[1];
+      const nextSeq = ++sequence;
+      statusNode.textContent = `Camera connected. Sending frame ${nextSeq} for analysis.`;
+      sendValue({ seq: nextSeq, jpeg });
+    }
+
+    function scheduleCapture() {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        captureNext();
+        scheduleCapture();
+      }, intervalMs);
+    }
+
+    async function startCamera() {
+      if (started) return;
+      started = true;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showUnavailable("Camera unavailable in this browser context.");
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 640 },
+            height: { ideal: 360 }
+          }
+        });
+        video.srcObject = stream;
+        await video.play();
+        statusNode.textContent = "Camera connected. Automatic PPE analysis is running.";
+        for (const track of stream.getVideoTracks()) {
+          track.addEventListener("ended", () => showUnavailable("Camera stream ended."));
+        }
+        scheduleCapture();
+      } catch (error) {
+        showUnavailable("Camera permission denied or camera unavailable.");
+      }
+    }
+
+    window.addEventListener("message", (event) => {
+      const message = event.data;
+      if (!message || message.type !== "streamlit:render") return;
+      const args = message.args || {};
+      intervalMs = Math.max(100, Number(args.interval_ms) || 200);
+      setHeight();
+      startCamera();
+    });
+
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:componentReady",
+      apiVersion: 1
+    }, "*");
+    setHeight();
+    window.addEventListener("pagehide", () => {
+      if (timer !== null) window.clearTimeout(timer);
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Construction-PPE dataset (Ultralytics) - YOLO detection format
+# Docs:     https://docs.ultralytics.com/datasets/detect/construction-ppe/
+# Download: python scripts/download_dataset.py
+# License:  AGPL-3.0 (see dataset/LICENSE after download)
+#
+# 'path' is intentionally omitted: Ultralytics then uses the folder containing
+# this file (dataset/) as the dataset root, so it works on any computer.
+#
+# IMPORTANT: the class IDs below must match the IDs used inside the label files
+# of the official dataset. Do NOT reorder them.
+
+train: images/train # 1132 images
+val: images/val # 143 images
+test: images/test # 141 images
+
+names:
+  0: helmet # -> Safety Helmet
+  1: gloves # -> Safety Gloves
+  2: vest # -> Safety Jacket / Safety Vest
+  3: boots # -> Safety Shoes
+  4: goggles # -> Safety Glasses
+  5: none
+  6: Person
+  7: no_helmet
+  8: no_goggle
+  9: no_gloves
+  10: no_boots

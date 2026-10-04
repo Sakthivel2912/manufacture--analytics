@@ -1,0 +1,27 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Training / prediction outputs
+runs/
+
+# Model weights (remove this line if you need to submit best.pt)
+*.pt
+
+# Images
+*.jpg
+*.jpeg
+*.png
+
+# Downloaded dataset contents (re-download with scripts/download_dataset.py)
+dataset/images/
+dataset/labels/
+dataset/*.zip
+dataset/*.cache
+dataset/labels/*.cache
+
+# Keep dataset configuration files
+!dataset/data.yaml
